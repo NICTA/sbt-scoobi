@@ -8,10 +8,10 @@ import scala.io.Source
 import Project.Initialize
 
 object Plugin extends sbt.Plugin {
-  import AssemblyKeys._
+  import ScoobiKeys._
     
-  object AssemblyKeys {
-    lazy val assembly = TaskKey[File]("assembly", "Builds a single-file deployable jar.")
+  object ScoobiKeys {
+    lazy val assembly = TaskKey[File]("package-hadoop", "Builds a single-file deployable jar with scoobi.")
     lazy val packageScala      = TaskKey[File]("assembly-package-scala", "Produces the scala artifact.")
     lazy val packageDependency = TaskKey[File]("assembly-package-dependency", "Produces the dependency artifact.")
   
@@ -48,8 +48,23 @@ object Plugin extends sbt.Plugin {
       ao: AssemblyOption, ej: Classpath, log: Logger) = {
     import sbt.classpath.ClasspathUtilities
 
-    val (libs, dirs) = classpath.map(_.data).partition(ClasspathUtilities.isArchive)
+    var (libs, dirs) = classpath.map(_.data).partition(ClasspathUtilities.isArchive)
     val (depLibs, depDirs) = dependencies.map(_.data).partition(ClasspathUtilities.isArchive)
+
+    val extra = dependencies filter (
+      (dep) => (dep.data.getName matches ".*scoobi[\\-_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*javassist\\-[_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*avro-mapred\\-?[_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*avro\\-?[_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*odiago-avro\\-?[_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*xmlpull\\-?[_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*xpp3_min\\-?[_\\d\\.A-Za-z]*\\.jar$") ||
+               (dep.data.getName matches ".*xstream\\-?[_\\d\\.A-Z]*\\.jar$") ||
+               (dep.data.getName matches ".*scalaz-core\\-?[_\\d\\-\\.A-Z]*\\.jar$")
+    )
+
+    libs = (libs ++ extra.map(_.data))
+
     val services = mutable.Map[String, mutable.ArrayBuffer[String]]()
     val excludedJars = ej map {_.data}
     val libsFiltered = libs flatMap {
@@ -113,19 +128,19 @@ object Plugin extends sbt.Plugin {
   
   lazy val baseAssemblySettings: Seq[sbt.Project.Setting[_]] = Seq(
     assembly <<= (test in assembly, outputPath in assembly, packageOptions in assembly, assemblyOption in assembly, 
-        fullClasspath in assembly, dependencyClasspath in assembly, excludedJars in assembly, cacheDirectory, streams) map {
+        fullClasspath in assembly, dependencyClasspath in Compile, excludedJars in assembly, cacheDirectory, streams) map {
       (test, out, po, ao, cp, deps, ej, cacheDir, s) =>
         assemblyTask(out, po, ao, cp, deps, ej, cacheDir, s.log) },
 
     packageScala <<= (outputPath in assembly, packageOptions, assemblyOption in assembly, 
-        fullClasspath in assembly, dependencyClasspath in assembly, excludedJars in assembly, cacheDirectory, streams) map {
+        fullClasspath in assembly, dependencyClasspath in Compile, excludedJars in assembly, cacheDirectory, streams) map {
       (out, po, ao, cp, deps, ej, cacheDir, s) =>
         assemblyTask(out, po,
           ao.copy(includeBin = false, includeScala = true, includeDependency = false),
           cp, deps, ej, cacheDir, s.log) },
 
     packageDependency <<= (outputPath in assembly, packageOptions in assembly, assemblyOption in assembly, 
-        fullClasspath in assembly, dependencyClasspath in assembly, excludedJars in assembly, cacheDirectory, streams) map {
+        fullClasspath in assembly, dependencyClasspath in Compile, excludedJars in assembly, cacheDirectory, streams) map {
       (out, po, ao, cp, deps, ej, cacheDir, s) =>
         assemblyTask(out, po,
           ao.copy(includeBin = false, includeScala = false, includeDependency = true),
@@ -152,13 +167,11 @@ object Plugin extends sbt.Plugin {
     target in assembly <<= target,
     
     jarName in assembly <<= (jarName in assembly) or (defaultJarName in assembly),
-    defaultJarName in assembly <<= (name, version) { (name, version) => name + "-assembly-" + version + ".jar" },
+    defaultJarName in assembly <<= (name, version) { (name, version) => name.replace(' ', '_') + "-hadoop-" + version + ".jar" },
     
     mainClass in assembly <<= mainClass orr (mainClass in Runtime),
     
     fullClasspath in assembly <<= fullClasspath orr (fullClasspath in Runtime),
-    
-    dependencyClasspath in assembly <<= dependencyClasspath orr (dependencyClasspath in Runtime),
     
     excludedFiles in assembly := assemblyExcludedFiles _,
     excludedJars in assembly := Nil,
@@ -167,7 +180,7 @@ object Plugin extends sbt.Plugin {
     assembleArtifact in packageDependency := true    
   )
   
-  lazy val assemblySettings: Seq[sbt.Project.Setting[_]] = baseAssemblySettings
+  override def settings = super.settings ++ baseAssemblySettings
 }
 
 case class AssemblyOption(includeBin: Boolean,

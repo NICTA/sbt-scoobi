@@ -1,127 +1,53 @@
-sbt-assembly
+sbt-scoobi
 ============
 
-*Deploy fat JARs. Restart processes.*
+*sbt-scoobi is an sbt plugin that allows you to build self contained jars ready to use with*
 
-sbt-assembly is a sbt 0.10 port of an awesome sbt plugin by codahale:
 
-> assembly-sbt is a [simple-build-tool](http://code.google.com/p/simple-build-tool/)
-plugin for building a single JAR file of your project which includes all of its
-dependencies, allowing to deploy the damn thing as a single file without dicking
-around with shell scripts and lib directories or, worse, welding your
-configuration to your deployable in the form of a WAR file.
-
-Requirements
-------------
-
-* Simple Build Tool
-* The burning desire to have a simple deploy procedure.
-
-Latest
+Version
 ------
-0.7.1
+0.0.1
 
 How To Use
 ----------
 
-For sbt 0.11, add sbt-assembly as a dependency in `project/plugins.sbt`:
+Create a file at  `$PROJECT_ROOT/project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "X.X.X")
+resolvers += "Sbt Scoobi" at "http://nicta.github.com/sbt-scoobi/repository/"
+
+addSbtPlugin("com.nicta" %% "sbt-scoobi" % "0.0.1")
 ```
 
-Or, specify sbt-assembly.git as a dependency in `project/plugins/project/build.scala`:
-
-```scala
-import sbt._
-
-object Plugins extends Build {
-  lazy val root = Project("root", file(".")) dependsOn(
-    uri("git://github.com/eed3si9n/sbt-assembly.git#XX") // where XX is branch
-  )
-}
-```
-
-(You may need to check this project's tags to see what the most recent release
-is. I'm notoriously crap about updating the version numbers in my READMEs.)
-
-Then, add the following in your `build.sbt`:
-
-```scala
-import AssemblyKeys._ // put this at the top of the file
-
-seq(assemblySettings: _*)
-```
-
-or, for full configuration:
-
-```scala
-lazy val sub = Project("sub", file("sub")) settings(sbtassembly.Plugin.assemblySettings: _*)
-```
-
-Now you'll have an awesome new `assembly` task which will compile your project,
+Now from sbt you will have a new `package-hadoop` task which will compile your project,
 run your tests, and then pack your class files and all your dependencies into a
-single JAR file: `target/scala_X.X.X/projectname-assembly-X.X.X.jar`.
+single JAR file: `target/scala_X.X.X/projectname-hadoop-X.X.X.jar`.
 
-    > assembly
+This jar is ready to send to haddop, using "hadoop jar projectname-hadoop-X.X.X.jar"
 
-If you specify a `mainClass in assembly` in build.sbt (or just let it autodetect
-one) then you'll end up with a fully executable JAR, ready to rock.
+*Note*: There is currently an [undiagnosed issue](link-to-issue) in which there is an error finding "scala.math" from inside javassist. This appears to be a Mac specific issue, and a work around exists. Set *$HADOOP_CLASSPATH* to the name of the built jar, then run hadoop by passing in the name of the object with a `main` function to execute. e.g.
 
-Here is the list of the keys you can rewire for `assembly` task.
+        # mac workaround
+        $ export HADOOP_CLASSPATH=/path/to/WordCount-haddop-0.1.jar
+        $ hadoop ExamplesMainObjectToRun
 
-    target                        assembly-jar-name             test
-    assembly-option               main-class                    full-classpath
-    dependency-classpath          assembly-excluded-files       assembly-excluded-jars
+Other options
+-------------
 
-For example the name of the jar can be set as follows in build.sbt:
+There are a few extra options you can use in your build.sbt, to:
 
-```scala
-jarName in assembly := "something.jar"
-```
+* To change jar name:
+ 
+        ScoobiKeys.jarName := "newName.jar"
+ 
+* Don't run tests when building jar:
 
-To skip the test during assembly,
+        ScoobiKeys.test := {}
 
-```scala
-test in assembly := {}
-```
+* If sbt is unable to correctly detect the intended main function to execute when the jar is run, you can tell it (make sure the NameOfTheClass is fully qualified)
 
-To exclude Scala library,
+        mainClass := Some("NameOfTheClass")
 
-```scala
-assembleArtifact in packageScala := false
-```
-
-To exclude your source files,
-
-```scala
-assembleArtifact in packageBin := false
-```
-
-To exclude some jar file, first consider using `"provided"` dependency. The dependency will be part of compilation, but excluded from the runtime. Next, try creating a custom configuration that describes your classpath. If all efforts fail, here's a way to exclude jars:
-
-```scala
-excludedJars in assembly <<= (fullClasspath in assembly) map { cp => 
-  cp filter {_.data.getName == "compile-0.1.0.jar"}
-}
-```
-
-To exclude some class file,
-
-```scala
-excludedFiles in assembly := { (bases: Seq[File]) =>
-  bases flatMap { base =>
-    (base / "META-INF" * "*").get collect {
-      case f if f.getName == "something" => f
-      case f if f.getName.toLowerCase == "license" => f
-      case f if f.getName.toLowerCase == "manifest.mf" => f
-    }
-  }}
-```
-
-To make a jar containing only the dependencies, type
-
-    > assembly-package-dependency
 
 License
 -------

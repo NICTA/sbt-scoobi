@@ -1,3 +1,9 @@
+Deprecated
+=======
+
+This project is now deprecated. Please see Scoobi's userguide on using how to use sbt-assembly.
+
+
 sbt-scoobi
 ============
 
